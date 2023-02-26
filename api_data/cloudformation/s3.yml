@@ -1,0 +1,93 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  BucketName:
+    Type: String
+    Description: The name of the S3 bucket to create.
+
+
+Resources:
+  MyBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Ref BucketName
+
+  MyBucketPolicy:
+      Type: 'AWS::S3::BucketPolicy'
+      Properties:
+        Bucket: !Ref MyBucket
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Sid: PublicReadForGetBucketObjects
+              Action: "s3:*"
+              Effect: Allow
+              Resource: !Sub 'arn:aws:s3:::${MyBucket}'
+              Principal: "*"
+  MyLambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: 's3:*'
+                Resource: '*'
+  LambdaLayer:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      CompatibleRuntimes:
+        - python3.7
+      Content:
+        S3Bucket: codeinputs
+        S3Key: layers_libs.zip
+      Description: 'Req Kib'
+      LayerName: 'Requests_2282'
+
+  MyLambdaFunction:
+      Type: AWS::Lambda::Function
+      Properties:
+        Role: !GetAtt MyLambdaRole.Arn
+        Runtime: python3.7
+        Handler: lambda_function.lambda_handler
+        Code:
+          S3Bucket: codeinputs
+          S3Key: lambda_function.zip
+        Tags:
+          - Key: Name
+            Value: MyLambdaFunction
+        Layers:
+          - !Ref LambdaLayer
+
+
+  FederationTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: "Name"
+          AttributeType: "S"
+        - AttributeName: "Quadrant"
+          AttributeType: "N"
+
+
+      KeySchema:
+        - AttributeName: "Name"
+          KeyType: "HASH"
+        - AttributeName: "Quadrant"
+          KeyType: "RANGE"
+      ProvisionedThroughput:
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
+      TableName: StocksData
